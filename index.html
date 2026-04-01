@@ -11,11 +11,9 @@
 
   <!-- Prism for syntax highlighting -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -245,22 +243,19 @@
 
     #input::placeholder { color: var(--muted); }
 
-    /* ── Prism line-numbers overrides ── */
-    pre.line-numbers { position: relative; padding-left: 52px !important; }
-    .line-numbers .line-numbers-rows {
-      border-right: 1px solid var(--border) !important;
-      background: var(--surface);
-      top: 0;
-      font-size: 13px;
-    }
-    .line-numbers-rows > span::before { color: var(--muted) !important; }
-
     /* ── Output area ── */
     .output-wrap {
       flex: 1;
-      overflow: auto;
+      display: flex;
+      overflow: hidden;
       background: var(--bg);
       position: relative;
+    }
+
+    .output-scroll {
+      flex: 1;
+      overflow: auto;
+      min-width: 0;
     }
 
     #output {
@@ -521,7 +516,10 @@
           <div class="empty-state-icon">&#9707;</div>
           <div class="empty-state-text">Formatted output will appear here</div>
         </div>
-        <pre id="output" class="line-numbers"><code id="output-code" class="language-markup"></code></pre>
+        <div class="line-gutter" id="output-gutter"></div>
+        <div class="output-scroll" id="output-scroll">
+          <pre id="output"><code id="output-code" class="language-markup"></code></pre>
+        </div>
       </div>
     </div>
 
@@ -565,6 +563,8 @@
   const modeSelect   = document.getElementById('mode');
   const indentInput  = document.getElementById('indent-size');
   const inputGutter  = document.getElementById('input-gutter');
+  const outputGutter = document.getElementById('output-gutter');
+  const outputScroll = document.getElementById('output-scroll');
   const btnFormat    = document.getElementById('btn-format');
   const btnClear     = document.getElementById('btn-clear');
   const btnCopy      = document.getElementById('btn-copy');
@@ -577,16 +577,20 @@
 
   let lastFormatted = '';
 
-  // ── Input line-number gutter ──────────────────────────────────────────────
-  function updateGutter() {
-    const count = inputEl.value ? inputEl.value.split('\n').length : 1;
-    if (parseInt(inputGutter.dataset.lines, 10) === count) return; // no change
-    inputGutter.dataset.lines = count;
-    inputGutter.innerHTML = Array.from({ length: count }, (_, i) => `<div>${i + 1}</div>`).join('');
+  // ── Line-number gutters ───────────────────────────────────────────────────
+  function buildGutter(gutter, count) {
+    if (parseInt(gutter.dataset.lines, 10) === count) return;
+    gutter.dataset.lines = count;
+    gutter.innerHTML = Array.from({ length: count }, (_, i) => `<div>${i + 1}</div>`).join('');
   }
 
-  inputEl.addEventListener('scroll', () => { inputGutter.scrollTop = inputEl.scrollTop; });
-  updateGutter();
+  function updateInputGutter() {
+    buildGutter(inputGutter, inputEl.value ? inputEl.value.split('\n').length : 1);
+  }
+
+  inputEl.addEventListener('scroll',  () => { inputGutter.scrollTop  = inputEl.scrollTop; });
+  outputScroll.addEventListener('scroll', () => { outputGutter.scrollTop = outputScroll.scrollTop; });
+  updateInputGutter();
 
   // ── Detect language from content ──────────────────────────────────────────
   function detectMode(code) {
@@ -646,6 +650,9 @@
       outputCode.textContent = result;
       Prism.highlightElement(outputCode);
 
+      buildGutter(outputGutter, countLines(result));
+      outputGutter.scrollTop = 0;
+
       emptyState.style.display = 'none';
       outputCount.textContent  = `${result.length.toLocaleString()} chars`;
       setStatus('ok', `Formatted in ${elapsed} ms`, true);
@@ -669,7 +676,7 @@
   inputEl.addEventListener('input', () => {
     const n = inputEl.value.length;
     inputCount.textContent = n ? `${n.toLocaleString()} chars` : '0 chars';
-    updateGutter();
+    updateInputGutter();
 
     // Auto-detect mode based on content
     if (inputEl.value.trim()) {
@@ -697,8 +704,10 @@
 
   btnClear.addEventListener('click', () => {
     inputEl.value        = '';
-    updateGutter();
+    updateInputGutter();
     outputCode.textContent = '';
+    outputGutter.innerHTML = '';
+    outputGutter.dataset.lines = '';
     emptyState.style.display = '';
     inputCount.textContent   = '0 chars';
     outputCount.textContent  = '';
