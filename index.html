@@ -625,16 +625,45 @@ Prism.languages.ampscript = {
     );
   }
 
+  // Split a single line into multiple statements wherever a statement-level
+  // keyword appears mid-line (e.g. "SET @a = 1 SET @b = 2" → two lines).
+  // Uses lookbehind to skip keywords that are already at the line start.
+  function splitAtStatementBoundaries(line) {
+    if (!line.trim()) return [line];
+    // Keywords that begin a new statement (order matters: ELSEIF before ELSE)
+    const STMTS = ['ELSEIF', 'ELSE', 'ENDIF', 'SET', 'VAR', 'IF', 'FOR', 'NEXT', 'DO', 'LOOP', 'WEND', 'OUTPUT'];
+    let parts = [line];
+    for (const kw of STMTS) {
+      const re  = new RegExp('(?<=\\S)\\s+(' + kw + ')\\b', 'gi');
+      const next = [];
+      for (const part of parts) {
+        let last = 0, m;
+        re.lastIndex = 0;
+        while ((m = re.exec(part)) !== null) {
+          next.push(part.slice(last, m.index).trimEnd());
+          last = m.index + m[0].length - m[1].length; // start at the keyword itself
+        }
+        next.push(part.slice(last));
+      }
+      parts = next.filter(p => p.trim());
+    }
+    return parts.map(p => p.trim()).filter(Boolean);
+  }
+
   // Format the content inside a %%[...]%% block.
   function formatAmpBlock(content, indentSize) {
-    const IND  = ' '.repeat(indentSize || 2);
-    let depth  = 0;
-    const out  = [];
-    const rawLines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const IND = ' '.repeat(indentSize || 2);
+    let depth = 0;
+    const out = [];
 
-    for (let line of rawLines) {
-      line     = uppercaseAmpKeywords(line);
-      const u  = line.toUpperCase();
+    const allLines = content
+      .split('\n')
+      .flatMap(line => line.trim() ? splitAtStatementBoundaries(line.trim()) : [''])
+      .map(l => l ? uppercaseAmpKeywords(l) : '');
+
+    for (const line of allLines) {
+      if (!line) { out.push(''); continue; }
+      const u = line.toUpperCase();
 
       // De-indent BEFORE printing these closing/mid keywords
       if (/^(ENDIF|NEXT\b|LOOP\b|WEND\b)/.test(u) || /^ELSE(IF\s|\s|$)/.test(u)) {
