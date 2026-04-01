@@ -761,19 +761,9 @@
     valPanel.classList.remove('collapsed');
   }
 
-  // ── Line-number helpers ───────────────────────────────────────────────────
+  // ── Validation helpers ───────────────────────────────────────────────────
   function lineOf(raw, index) {
     return raw.substring(0, index).split('\n').length;
-  }
-
-  // Run a regex against raw and return [{match, line}] for every hit.
-  // Always uses the 'g' flag internally.
-  function matchAll(raw, re) {
-    const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
-    const results = [];
-    let m;
-    while ((m = g.exec(raw)) !== null) results.push({ match: m[0], line: lineOf(raw, m.index) });
-    return results;
   }
 
   function fmtLines(lines) {
@@ -787,119 +777,167 @@
   function runChecks(raw) {
     const issues = [];
 
-    function add(level, msg, hint, lines) {
-      issues.push({ level, msg, hint, lines: lines || [] });
+    // Use DOMParser for accurate attribute detection — it correctly handles
+    // quoted attribute values, URL parameters, and ignores comment content.
+    const parser = new DOMParser();
+    const doc    = parser.parseFromString(raw, 'text/html');
+
+    // Returns true if position idx in raw is inside an HTML comment.
+    // This ensures MSO conditional blocks (<!--[if mso]>…<![endif]-->) don't
+    // shift the positional mapping between DOM elements and raw occurrences.
+    function insideComment(idx) {
+      const before     = raw.substring(0, idx);
+      const lastOpen   = before.lastIndexOf('<!--');
+      if (lastOpen === -1) return false;
+      return before.indexOf('-->', lastOpen) === -1;
     }
 
-    // ── Errors ────────────────────────────────────────────────────────────
-
-    const scriptTags = matchAll(raw, /<script\b[^>]*>/i);
-    if (scriptTags.length) {
-      add('error', `${scriptTags.length} <script> tag${scriptTags.length > 1 ? 's' : ''}`,
-        'JavaScript is blocked by virtually all email clients.',
-        scriptTags.map(h => h.line));
-    }
-
-    const extLinks = matchAll(raw, /<link\b[^>]*\brel\s*=\s*["']?stylesheet[^>]*>/i);
-    if (extLinks.length) {
-      add('error', `${extLinks.length} external stylesheet <link>`,
-        'External CSS is stripped by most email clients. Use inline styles.',
-        extLinks.map(h => h.line));
-    }
-
-    // ── Warnings ──────────────────────────────────────────────────────────
-
-    const allImgs = matchAll(raw, /<img\b[^>]*\/?>/i);
-
-    const noAlt = allImgs.filter(h => !/\balt\s*=/i.test(h.match));
-    if (noAlt.length) {
-      add('warn', `${noAlt.length} <img> missing alt`,
-        'Alt text is shown when images are blocked and is required for accessibility.',
-        noAlt.map(h => h.line));
-    }
-
-    const noWidth = allImgs.filter(h => !/\bwidth\s*=/i.test(h.match));
-    if (noWidth.length) {
-      add('warn', `${noWidth.length} <img> missing width`,
-        'Missing width causes layout shifts in clients that block images by default.',
-        noWidth.map(h => h.line));
-    }
-
-    const allTables = matchAll(raw, /<table\b[^>]*>/i);
-
-    const noRole = allTables.filter(h => !/\brole\s*=/i.test(h.match));
-    if (noRole.length) {
-      add('warn', `${noRole.length} <table> missing role="presentation"`,
-        'Helps screen readers skip layout tables.',
-        noRole.map(h => h.line));
-    }
-
-    const noCP = allTables.filter(h => !/\bcellpadding\s*=/i.test(h.match));
-    if (noCP.length) {
-      add('warn', `${noCP.length} <table> missing cellpadding="0"`,
-        'Some email clients add default cell padding, causing unwanted spacing.',
-        noCP.map(h => h.line));
-    }
-
-    const noCS = allTables.filter(h => !/\bcellspacing\s*=/i.test(h.match));
-    if (noCS.length) {
-      add('warn', `${noCS.length} <table> missing cellspacing="0"`,
-        'Some email clients add default cell spacing, causing unwanted gaps.',
-        noCS.map(h => h.line));
-    }
-
-    // Flexbox / Grid in inline styles
-    const flexInline = matchAll(raw, /style\s*=\s*["'][^"']*display\s*:\s*(flex|grid|inline-flex|inline-grid)/i);
-    if (flexInline.length) {
-      add('warn', `Flexbox/Grid in ${flexInline.length} inline style${flexInline.length > 1 ? 's' : ''}`,
-        'Very limited support in Outlook and older email clients.',
-        flexInline.map(h => h.line));
-    }
-
-    // Flexbox / Grid inside <style> blocks
-    const styleBlockRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
-    const flexStyleLines = [];
-    let sb;
-    while ((sb = styleBlockRe.exec(raw)) !== null) {
-      const blockOffset = sb.index + sb[0].indexOf('>') + 1;
-      const flexRe = /display\s*:\s*(flex|grid|inline-flex|inline-grid)/gi;
-      let fm;
-      while ((fm = flexRe.exec(sb[1])) !== null) {
-        flexStyleLines.push(lineOf(raw, blockOffset + fm.index));
+    // All positions of <tagName in raw, excluding those inside comments.
+    function tagPositions(tagName) {
+      const re = new RegExp('<' + tagName + '\\b', 'gi');
+      const pos = [];
+      let m;
+      while ((m = re.exec(raw)) !== null) {
+        if (!insideComment(m.index)) pos.push(m.index);
       }
+      return pos;
     }
+
+    // Map a subset of DOM elements to line numbers using positional ordering:
+    // the nth element in domArr corresponds to the nth occurrence in rawPos.
+    function linesFor(subset, domArr, rawPos) {
+      return subset.map(el => {
+        const n = domArr.indexOf(el);
+        return (n >= 0 && n < rawPos.length) ? lineOf(raw, rawPos[n]) : null;
+      }).filter(n => n !== null);
+    }
+
+    // ── Errors ──────────────────────────────────────────────────────────────
+
+    const scripts = [...doc.querySelectorAll('script')];
+    if (scripts.length) {
+      issues.push({ level: 'error',
+        msg:  `${scripts.length} <script> tag${scripts.length > 1 ? 's' : ''}`,
+        hint: 'JavaScript is blocked by virtually all email clients.',
+        lines: tagPositions('script').map(p => lineOf(raw, p)) });
+    }
+
+    const extLinks = [...doc.querySelectorAll('link[rel~="stylesheet"]')];
+    if (extLinks.length) {
+      const re = /<link\b[^>]*\brel\s*=\s*["'][^"']*stylesheet[^>]*>/gi;
+      const lines = [];
+      let m;
+      while ((m = re.exec(raw)) !== null) if (!insideComment(m.index)) lines.push(lineOf(raw, m.index));
+      issues.push({ level: 'error',
+        msg:  `${extLinks.length} external stylesheet <link>`,
+        hint: 'External CSS is stripped by most email clients. Use inline styles.',
+        lines });
+    }
+
+    // ── Warnings ────────────────────────────────────────────────────────────
+
+    const allImgsDom = [...doc.querySelectorAll('img')];
+    const imgPos     = tagPositions('img');
+
+    const noAlt = allImgsDom.filter(img => !img.hasAttribute('alt'));
+    if (noAlt.length) {
+      issues.push({ level: 'warn',
+        msg:  `${noAlt.length} <img> missing alt`,
+        hint: 'Alt text is shown when images are blocked and is required for accessibility.',
+        lines: linesFor(noAlt, allImgsDom, imgPos) });
+    }
+
+    const noWidth = allImgsDom.filter(img => !img.hasAttribute('width'));
+    if (noWidth.length) {
+      issues.push({ level: 'warn',
+        msg:  `${noWidth.length} <img> missing width`,
+        hint: 'Missing width causes layout shifts in clients that block images by default.',
+        lines: linesFor(noWidth, allImgsDom, imgPos) });
+    }
+
+    const allTablesDom = [...doc.querySelectorAll('table')];
+    const tablePos     = tagPositions('table');
+
+    function tableCheck(attr, label, hint) {
+      const missing = allTablesDom.filter(t => !t.hasAttribute(attr));
+      if (!missing.length) return;
+      issues.push({ level: 'warn',
+        msg:  `${missing.length} <table> missing ${label}`,
+        hint,
+        lines: linesFor(missing, allTablesDom, tablePos) });
+    }
+
+    tableCheck('role',        'role="presentation"', 'Helps screen readers skip layout tables.');
+    tableCheck('cellpadding', 'cellpadding="0"',      'Some email clients add default cell padding, causing unwanted spacing.');
+    tableCheck('cellspacing', 'cellspacing="0"',      'Some email clients add default cell spacing, causing unwanted gaps.');
+
+    // Flexbox/Grid in inline styles — DOM detects, regex finds line
+    const flexInlineDom = [...doc.querySelectorAll('[style]')].filter(
+      el => /display\s*:\s*(flex|grid|inline-flex|inline-grid)/i.test(el.getAttribute('style'))
+    );
+    if (flexInlineDom.length) {
+      const re = /style\s*=\s*(?:"[^"]*display\s*:\s*(?:flex|grid|inline-flex|inline-grid)[^"]*"|'[^']*display\s*:\s*(?:flex|grid|inline-flex|inline-grid)[^']*')/gi;
+      const lines = [];
+      let m;
+      while ((m = re.exec(raw)) !== null) if (!insideComment(m.index)) lines.push(lineOf(raw, m.index));
+      issues.push({ level: 'warn',
+        msg:  `Flexbox/Grid in ${flexInlineDom.length} inline style${flexInlineDom.length > 1 ? 's' : ''}`,
+        hint: 'Very limited support in Outlook and older email clients.',
+        lines });
+    }
+
+    // Flexbox/Grid in <style> blocks
+    const stylesDom = [...doc.querySelectorAll('style')];
+    const stylePos  = tagPositions('style');
+    const flexStyleLines = [];
+    stylesDom.forEach((el, i) => {
+      if (/display\s*:\s*(flex|grid|inline-flex|inline-grid)/i.test(el.textContent)) {
+        if (i < stylePos.length) flexStyleLines.push(lineOf(raw, stylePos[i]));
+      }
+    });
     if (flexStyleLines.length) {
-      add('warn', `Flexbox/Grid in <style> block`,
-        'Very limited support in Outlook and older email clients.',
-        flexStyleLines);
+      issues.push({ level: 'warn',
+        msg:  'Flexbox/Grid in <style> block',
+        hint: 'Very limited support in Outlook and older email clients.',
+        lines: flexStyleLines });
     }
 
-    // position: fixed / absolute in inline styles
-    const posInline = matchAll(raw, /style\s*=\s*["'][^"']*position\s*:\s*(fixed|absolute)/i);
-    if (posInline.length) {
-      add('warn', `position: fixed/absolute in ${posInline.length} inline style${posInline.length > 1 ? 's' : ''}`,
-        'Positioned elements behave unpredictably across email clients.',
-        posInline.map(h => h.line));
+    // position: fixed/absolute in inline styles
+    const posInlineDom = [...doc.querySelectorAll('[style]')].filter(
+      el => /position\s*:\s*(fixed|absolute)/i.test(el.getAttribute('style'))
+    );
+    if (posInlineDom.length) {
+      const re = /style\s*=\s*(?:"[^"]*position\s*:\s*(?:fixed|absolute)[^"]*"|'[^']*position\s*:\s*(?:fixed|absolute)[^']*')/gi;
+      const lines = [];
+      let m;
+      while ((m = re.exec(raw)) !== null) if (!insideComment(m.index)) lines.push(lineOf(raw, m.index));
+      issues.push({ level: 'warn',
+        msg:  `position: fixed/absolute in ${posInlineDom.length} inline style${posInlineDom.length > 1 ? 's' : ''}`,
+        hint: 'Positioned elements behave unpredictably across email clients.',
+        lines });
     }
 
-    // ── Info ──────────────────────────────────────────────────────────────
+    // ── Info ────────────────────────────────────────────────────────────────
 
     if (!/^\s*<!doctype/i.test(raw)) {
-      add('info', 'Missing <!DOCTYPE html>',
-        'Helps ensure consistent rendering across email clients.', []);
+      issues.push({ level: 'info',
+        msg:  'Missing <!DOCTYPE html>',
+        hint: 'Helps ensure consistent rendering across email clients.',
+        lines: [] });
     }
 
-    const hasCharset  = matchAll(raw, /<meta\b[^>]*\bcharset\b[^>]*>/i);
-    const hasHttpEq   = matchAll(raw, /<meta\b[^>]*\bhttp-equiv\s*=\s*["']?content-type[^>]*>/i);
-    if (!hasCharset.length && !hasHttpEq.length) {
-      add('info', 'Missing charset <meta> tag',
-        'Add <meta charset="UTF-8"> to prevent character encoding issues.', []);
+    if (!doc.querySelector('meta[charset]') && !doc.querySelector('meta[http-equiv="Content-Type"]')) {
+      issues.push({ level: 'info',
+        msg:  'Missing charset <meta> tag',
+        hint: 'Add <meta charset="UTF-8"> to prevent character encoding issues.',
+        lines: [] });
     }
 
-    const hasViewport = matchAll(raw, /<meta\b[^>]*\bname\s*=\s*["']?viewport[^>]*>/i);
-    if (!hasViewport.length) {
-      add('info', 'Missing viewport <meta> tag',
-        'Add <meta name="viewport" content="width=device-width, initial-scale=1"> for mobile.', []);
+    if (!doc.querySelector('meta[name="viewport"]')) {
+      issues.push({ level: 'info',
+        msg:  'Missing viewport <meta> tag',
+        hint: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> for mobile.',
+        lines: [] });
     }
 
     return issues;
