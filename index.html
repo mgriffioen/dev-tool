@@ -345,12 +345,7 @@
         <input id="indent-size" type="number" value="2" min="1" max="8">
       </div>
 
-      <div class="control-group">
-        <label class="control-label" for="wrap-line">Wrap at</label>
-        <input id="wrap-line" type="number" value="120" min="60" max="300" step="10">
-      </div>
-
-      <button class="btn btn-ghost" id="btn-clear" data-tip="Clear both panels">Clear</button>
+<button class="btn btn-ghost" id="btn-clear" data-tip="Clear both panels">Clear</button>
       <button class="btn btn-primary" id="btn-format">&#9654; Format</button>
     </div>
   </header>
@@ -461,7 +456,7 @@
         // HTML beautify options tuned for email code
         result = html_beautify(raw, {
           indent_size:              indentSize,
-          wrap_line_length:         wrapAt,
+          wrap_line_length:         0,
           preserve_newlines:        false,
           max_preserve_newlines:    1,
           indent_inner_html:        true,
@@ -470,9 +465,7 @@
           inline:                   [],           // treat ALL tags as block — better for email
           unformatted:              [],
           content_unformatted:      ['pre', 'textarea'],
-          // Keep inline styles on the same line as the tag
-          wrap_attributes:          'force-aligned',
-          wrap_attributes_indent_size: indentSize,
+          wrap_attributes:          'auto',
         });
       }
 
