@@ -554,7 +554,7 @@
 // ── Prism: AMPscript language definition ─────────────────────────────────────
 Prism.languages.ampscript = {
   'comment':   /\/\*[\s\S]*?\*\//,
-  'delimiter': { pattern: /%%\[|\]%%|%%=|=%%/, alias: 'tag' },
+  'delimiter': { pattern: new RegExp(P+P+'\\[|\\]'+P+P+'|'+P+P+'=|='+P+P), alias: 'tag' },
   'string':    /(["'])(?:(?!\1)[^\r\n\\]|\\.)*\1/,
   'variable':  { pattern: /@\w+/, alias: 'variable' },
   'keyword':   { pattern: /\b(?:IF|THEN|ELSEIF|ELSE|ENDIF|FOR|NEXT|DO|DOWNTO|TO|STEP|WHILE|WEND|LOOP|VAR|SET|AND|OR|NOT|TRUE|FALSE|NULL|EMPTY|IS|OUTPUT)\b/i, alias: 'keyword' },
@@ -566,6 +566,10 @@ Prism.languages.ampscript = {
 
 (function () {
   'use strict';
+  // P is used to build AMPscript delimiters (%%) at runtime so SFMC's
+  // CloudPage renderer never sees literal %%[ / ]%% / %%= / =%% in this
+  // file's own source and tries to execute them as AMPscript.
+  const P = '%';
 
   const inputEl      = document.getElementById('input');
   const outputCode   = document.getElementById('output-code');
@@ -612,7 +616,7 @@ Prism.languages.ampscript = {
     const trimmed = code.trim();
     if (!trimmed.startsWith('<') && /[a-z-]+\s*\{[^}]*\}/i.test(trimmed)) return 'css';
     // Pure AMPscript: has %% markers but no HTML tags
-    if (/%%[\[=]/.test(trimmed) && !/<[a-z]/i.test(trimmed)) return 'ampscript';
+    if (new RegExp(P+P+'[\\[=]').test(trimmed) && !/<[a-z]/i.test(trimmed)) return 'ampscript';
     return 'html';
   }
 
@@ -684,11 +688,11 @@ Prism.languages.ampscript = {
   // Top-level AMPscript formatter (for pure AMPscript mode).
   function formatAmpscript(raw, indentSize) {
     let result = raw;
-    result = result.replace(/%%\[([\s\S]*?)\]%%/g, (_, content) =>
-      '%%[\n' + formatAmpBlock(content, indentSize) + '\n]%%'
+    result = result.replace(new RegExp(P+P+'\\[([\\s\\S]*?)\\]'+P+P, 'g'), (_, content) =>
+      P+P+'[\n' + formatAmpBlock(content, indentSize) + '\n]'+P+P
     );
-    result = result.replace(/%%=([\s\S]*?)=%%/g, (_, expr) =>
-      '%%=' + expr.trim() + '=%%'
+    result = result.replace(new RegExp(P+P+'=([\\s\\S]*?)='+P+P, 'g'), (_, expr) =>
+      P+P+'=' + expr.trim() + '='+P+P
     );
     return result;
   }
@@ -727,11 +731,11 @@ Prism.languages.ampscript = {
         const ampBlocks = [];
 
         let src = raw;
-        src = src.replace(/%%\[([\s\S]*?)\]%%/g, (_, content) => {
+        src = src.replace(new RegExp(P+P+'\\[([\\s\\S]*?)\\]'+P+P, 'g'), (_, content) => {
           ampBlocks.push({ type: 'block', content });
           return `<!-- __AMP${ampBlocks.length - 1}__ -->`;
         });
-        src = src.replace(/%%=([\s\S]*?)=%%/g, (_, expr) => {
+        src = src.replace(new RegExp(P+P+'=([\\s\\S]*?)='+P+P, 'g'), (_, expr) => {
           ampBlocks.push({ type: 'inline', content: expr });
           return `__AMP${ampBlocks.length - 1}__`;
         });
@@ -753,10 +757,10 @@ Prism.languages.ampscript = {
         if (ampBlocks.length) {
           result = result.replace(/<!-- __AMP(\d+)__ -->/g, (_, i) => {
             const b = ampBlocks[+i];
-            return '%%[\n' + formatAmpBlock(b.content, indentSize) + '\n]%%';
+            return P+P+'[\n' + formatAmpBlock(b.content, indentSize) + '\n]'+P+P;
           });
           result = result.replace(/__AMP(\d+)__/g, (_, i) =>
-            '%%=' + ampBlocks[+i].content.trim() + '=%%'
+            P+P+'=' + ampBlocks[+i].content.trim() + '='+P+P
           );
         }
       }
