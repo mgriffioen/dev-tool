@@ -721,8 +721,29 @@
 
   btnCopy.addEventListener('click', async () => {
     if (!lastFormatted) return;
-    try {
-      await navigator.clipboard.writeText(lastFormatted);
+
+    let success = false;
+
+    // Modern clipboard API (requires secure context)
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(lastFormatted);
+        success = true;
+      } catch { /* fall through */ }
+    }
+
+    // Fallback: create a temporary off-screen textarea and execCommand
+    if (!success) {
+      const ta = document.createElement('textarea');
+      ta.value = lastFormatted;
+      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none;';
+      document.body.appendChild(ta);
+      ta.select();
+      try { success = document.execCommand('copy'); } catch { /* ignore */ }
+      document.body.removeChild(ta);
+    }
+
+    if (success) {
       const orig = btnCopy.textContent;
       btnCopy.textContent = '✓ Copied!';
       btnCopy.classList.add('btn-success');
@@ -730,7 +751,7 @@
         btnCopy.textContent = orig;
         btnCopy.classList.remove('btn-success');
       }, 1800);
-    } catch {
+    } else {
       setStatus('err', 'Clipboard access denied — select and copy manually', false);
     }
   });
