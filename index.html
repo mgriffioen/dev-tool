@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML & CSS Formatter — Email Dev Tools</title>
+
+  <!-- js-beautify for formatting -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js"></script>
+
+  <!-- Prism for syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2e3245;
+      --accent:    #4f6ef7;
+      --accent-h:  #6b86ff;
+      --success:   #3ecf8e;
+      --text:      #e2e4f0;
+      --muted:     #7b82a0;
+      --radius:    8px;
+      --font-ui:   'Segoe UI', system-ui, -apple-system, sans-serif;
+      --font-code: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 14px;
+    }
+
+    /* ── Layout ── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 16px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    label.control-label {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    select, input[type="number"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius);
+      padding: 5px 8px;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    select:focus, input[type="number"]:focus {
+      border-color: var(--accent);
+    }
+
+    input[type="number"] {
+      width: 56px;
+      text-align: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-h); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+    .btn-success {
+      background: var(--success);
+      color: #0f1117;
+    }
+
+    /* ── Panels ── */
+    .panels {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      gap: 0;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .panel + .panel {
+      border-left: 2px solid var(--border);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .char-count {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── Input textarea ── */
+    #input {
+      flex: 1;
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: none;
+      outline: none;
+      resize: none;
+      padding: 16px;
+      font-family: var(--font-code);
+      font-size: 13px;
+      line-height: 1.6;
+      tab-size: 2;
+    }
+
+    #input::placeholder { color: var(--muted); }
+
+    /* ── Output area ── */
+    .output-wrap {
+      flex: 1;
+      overflow: auto;
+      background: var(--bg);
+      position: relative;
+    }
+
+    #output {
+      margin: 0;
+      padding: 16px;
+      font-family: var(--font-code);
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre;
+      min-height: 100%;
+      background: transparent;
+    }
+
+    /* Override Prism background */
+    #output code[class*="language-"],
+    #output pre[class*="language-"] {
+      background: transparent !important;
+      margin: 0;
+      padding: 0;
+      font-size: inherit;
+      line-height: inherit;
+    }
+
+    /* Empty state */
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    .empty-state-icon { font-size: 32px; opacity: 0.4; }
+    .empty-state-text { font-size: 13px; }
+
+    /* ── Status bar ── */
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 14px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .status-msg {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .status-dot.ok  { background: var(--success); }
+    .status-dot.err { background: #f56565; }
+
+    /* ── Tooltip ── */
+    [data-tip] { position: relative; }
+    [data-tip]::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2e3245;
+      color: var(--text);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    [data-tip]:hover::after { opacity: 1; }
+
+    @media (max-width: 700px) {
+      .panels { flex-direction: column; }
+      .panel + .panel { border-left: none; border-top: 2px solid var(--border); }
+      .controls { gap: 6px; }
+      .control-group { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">&#10094;/&#10095;</div>
+      HTML &amp; CSS Formatter
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label class="control-label" for="mode">Mode</label>
+        <select id="mode">
+          <option value="html">HTML</option>
+          <option value="css">CSS</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label" for="indent-size">Indent</label>
+        <input id="indent-size" type="number" value="2" min="1" max="8">
+      </div>
+
+      <div class="control-group">
+        <label class="control-label" for="wrap-line">Wrap at</label>
+        <input id="wrap-line" type="number" value="120" min="60" max="300" step="10">
+      </div>
+
+      <button class="btn btn-ghost" id="btn-clear" data-tip="Clear both panels">Clear</button>
+      <button class="btn btn-primary" id="btn-format">&#9654; Format</button>
+    </div>
+  </header>
+
+  <!-- ── Panels ── -->
+  <div class="panels">
+
+    <!-- Input -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Input — paste your code here</span>
+        <div class="panel-actions">
+          <span class="char-count" id="input-count">0 chars</span>
+          <button class="btn btn-ghost" id="btn-paste" data-tip="Paste from clipboard" style="padding:4px 10px;font-size:12px;">Paste</button>
+        </div>
+      </div>
+      <textarea id="input" spellcheck="false"
+        placeholder="Paste your messy HTML or CSS here…&#10;&#10;Tip: inline styles, nested tables, and email boilerplate are all handled."></textarea>
+    </div>
+
+    <!-- Output -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Output — formatted &amp; highlighted</span>
+        <div class="panel-actions">
+          <span class="char-count" id="output-count"></span>
+          <button class="btn btn-ghost" id="btn-copy" data-tip="Copy formatted code" style="padding:4px 10px;font-size:12px;">Copy</button>
+        </div>
+      </div>
+      <div class="output-wrap">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-state-icon">&#9707;</div>
+          <div class="empty-state-text">Formatted output will appear here</div>
+        </div>
+        <pre id="output"><code id="output-code" class="language-markup"></code></pre>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Status bar ── -->
+  <div class="statusbar">
+    <div class="status-msg">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Ready</span>
+    </div>
+    <span id="status-right"></span>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const inputEl      = document.getElementById('input');
+  const outputCode   = document.getElementById('output-code');
+  const emptyState   = document.getElementById('empty-state');
+  const inputCount   = document.getElementById('input-count');
+  const outputCount  = document.getElementById('output-count');
+  const statusDot    = document.getElementById('status-dot');
+  const statusText   = document.getElementById('status-text');
+  const statusRight  = document.getElementById('status-right');
+  const modeSelect   = document.getElementById('mode');
+  const indentInput  = document.getElementById('indent-size');
+  const wrapInput    = document.getElementById('wrap-line');
+  const btnFormat    = document.getElementById('btn-format');
+  const btnClear     = document.getElementById('btn-clear');
+  const btnCopy      = document.getElementById('btn-copy');
+  const btnPaste     = document.getElementById('btn-paste');
+
+  let lastFormatted = '';
+
+  // ── Detect language from content ──────────────────────────────────────────
+  function detectMode(code) {
+    const trimmed = code.trim();
+    // Looks like CSS if it has { } blocks but no < tags
+    if (!trimmed.startsWith('<') && /[a-z-]+\s*\{[^}]*\}/i.test(trimmed)) return 'css';
+    return 'html';
+  }
+
+  // ── Format ────────────────────────────────────────────────────────────────
+  function format() {
+    const raw  = inputEl.value;
+    if (!raw.trim()) {
+      setStatus('', 'Nothing to format', false);
+      return;
+    }
+
+    const indentSize = Math.max(1, Math.min(8, parseInt(indentInput.value, 10) || 2));
+    const wrapAt     = Math.max(60, Math.min(300, parseInt(wrapInput.value, 10) || 120));
+
+    // Auto-detect if user hasn't manually changed the select after typing
+    const mode = modeSelect.value;
+
+    try {
+      let result;
+      const t0 = performance.now();
+
+      if (mode === 'css') {
+        result = css_beautify(raw, {
+          indent_size: indentSize,
+          selector_separator_newline: true,
+          end_with_newline: true,
+          newline_between_rules: true,
+        });
+      } else {
+        // HTML beautify options tuned for email code
+        result = html_beautify(raw, {
+          indent_size:              indentSize,
+          wrap_line_length:         wrapAt,
+          preserve_newlines:        false,
+          max_preserve_newlines:    1,
+          indent_inner_html:        true,
+          end_with_newline:         false,
+          extra_liners:             ['head', 'body', '/html'],
+          inline:                   [],           // treat ALL tags as block — better for email
+          unformatted:              [],
+          content_unformatted:      ['pre', 'textarea'],
+          // Keep inline styles on the same line as the tag
+          wrap_attributes:          'force-aligned',
+          wrap_attributes_indent_size: indentSize,
+        });
+      }
+
+      const elapsed = (performance.now() - t0).toFixed(1);
+      lastFormatted  = result;
+
+      // Syntax highlight
+      const lang = mode === 'css' ? 'css' : 'markup';
+      outputCode.className = `language-${lang}`;
+      outputCode.textContent = result;
+      Prism.highlightElement(outputCode);
+
+      emptyState.style.display = 'none';
+      outputCount.textContent  = `${result.length.toLocaleString()} chars`;
+      setStatus('ok', `Formatted in ${elapsed} ms`, true);
+      statusRight.textContent = `${countLines(result)} lines`;
+
+    } catch (err) {
+      setStatus('err', `Error: ${err.message}`, false);
+    }
+  }
+
+  function countLines(str) {
+    return (str.match(/\n/g) || []).length + 1;
+  }
+
+  function setStatus(type, msg, ok) {
+    statusDot.className = 'status-dot' + (type ? ` ${type}` : '');
+    statusText.textContent = msg;
+  }
+
+  // ── Char counter ──────────────────────────────────────────────────────────
+  inputEl.addEventListener('input', () => {
+    const n = inputEl.value.length;
+    inputCount.textContent = n ? `${n.toLocaleString()} chars` : '0 chars';
+
+    // Auto-detect mode based on content
+    if (inputEl.value.trim()) {
+      modeSelect.value = detectMode(inputEl.value);
+    }
+  });
+
+  // ── Tab key in textarea ───────────────────────────────────────────────────
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = inputEl.selectionStart;
+      const indent = ' '.repeat(parseInt(indentInput.value, 10) || 2);
+      inputEl.setRangeText(indent, s, s, 'end');
+    }
+    // Ctrl/Cmd + Enter to format
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      format();
+    }
+  });
+
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  btnFormat.addEventListener('click', format);
+
+  btnClear.addEventListener('click', () => {
+    inputEl.value        = '';
+    outputCode.textContent = '';
+    emptyState.style.display = '';
+    inputCount.textContent   = '0 chars';
+    outputCount.textContent  = '';
+    statusRight.textContent  = '';
+    lastFormatted = '';
+    setStatus('', 'Ready', false);
+  });
+
+  btnCopy.addEventListener('click', async () => {
+    if (!lastFormatted) return;
+    try {
+      await navigator.clipboard.writeText(lastFormatted);
+      const orig = btnCopy.textContent;
+      btnCopy.textContent = '✓ Copied!';
+      btnCopy.classList.add('btn-success');
+      setTimeout(() => {
+        btnCopy.textContent = orig;
+        btnCopy.classList.remove('btn-success');
+      }, 1800);
+    } catch {
+      setStatus('err', 'Clipboard access denied — select and copy manually', false);
+    }
+  });
+
+  btnPaste.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      inputEl.value = text;
+      inputEl.dispatchEvent(new Event('input'));
+      format();
+    } catch {
+      setStatus('err', 'Clipboard read denied — paste manually with Ctrl+V', false);
+    }
+  });
+
+  // ── Keyboard shortcut hint ────────────────────────────────────────────────
+  btnFormat.setAttribute('data-tip', 'Format  (Ctrl+Enter)');
+
+})();
+</script>
+</body>
+</html>
