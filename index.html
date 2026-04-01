@@ -411,7 +411,6 @@
   const statusRight  = document.getElementById('status-right');
   const modeSelect   = document.getElementById('mode');
   const indentInput  = document.getElementById('indent-size');
-  const wrapInput    = document.getElementById('wrap-line');
   const btnFormat    = document.getElementById('btn-format');
   const btnClear     = document.getElementById('btn-clear');
   const btnCopy      = document.getElementById('btn-copy');
@@ -436,7 +435,6 @@
     }
 
     const indentSize = Math.max(1, Math.min(8, parseInt(indentInput.value, 10) || 2));
-    const wrapAt     = Math.max(60, Math.min(300, parseInt(wrapInput.value, 10) || 120));
 
     // Auto-detect if user hasn't manually changed the select after typing
     const mode = modeSelect.value;
